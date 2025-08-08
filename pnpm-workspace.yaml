@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - pkg/*
+
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - sharp
+
