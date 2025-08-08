@@ -5,107 +5,107 @@ export interface DataFeedMetadata {
 	description: string;
 	decimals: number;
 	version: number;
-	latestPrice: bigint;
-	lastUpdated: bigint;
+	aggregatorAddress: string | null;
 }
 
-export async function fetchDataFeedMetadata(
+export async function fetchDataFeedMetadataWithAggregator(
 	context: Context,
 	address: `0x${string}`,
 ): Promise<DataFeedMetadata | null> {
 	try {
-		// Fetch basic metadata first (these should not revert)
-		const [description, decimals, version] = await Promise.all([
-			context.client.readContract({
-				address,
-				abi: AggregatorV3Abi,
-				functionName: "description",
-			}),
-			context.client.readContract({
-				address,
-				abi: AggregatorV3Abi,
-				functionName: "decimals",
-			}),
-			context.client.readContract({
-				address,
-				abi: AggregatorV3Abi,
-				functionName: "version",
-			}),
-		]);
+		// Use multicall to fetch all metadata in a single call
+		const results = await context.client.multicall({
+			contracts: [
+				{
+					address,
+					abi: AggregatorV3Abi,
+					functionName: "description",
+				},
+				{
+					address,
+					abi: AggregatorV3Abi,
+					functionName: "decimals",
+				},
+				{
+					address,
+					abi: AggregatorV3Abi,
+					functionName: "version",
+				},
+				{
+					address,
+					abi: AggregatorV3Abi,
+					functionName: "aggregator",
+				},
+			],
+		});
 
-		// Try to fetch latest round data separately with better error handling
-		let latestPrice = 0n;
-		let lastUpdated = 0n;
-
-		try {
-			const latestRoundData = await context.client.readContract({
-				address,
-				abi: AggregatorV3Abi,
-				functionName: "latestRoundData",
-			});
-
-			// Validate the round data
-			const [roundId, answer, _startedAt, updatedAt, _answeredInRound] =
-				latestRoundData;
-
-			// Check for invalid data conditions
-			if (roundId === 0n || updatedAt === 0n || answer === 0n) {
-				console.warn(
-					`Invalid round data for ${address}: roundId=${roundId}, answer=${answer}, updatedAt=${updatedAt}`,
-				);
-				// Continue without price data but still create the feed
-			} else {
-				latestPrice = answer;
-				lastUpdated = updatedAt;
-			}
-		} catch (roundDataError) {
-			console.warn(
-				`Failed to fetch latest round data for ${address}, continuing without price data:`,
-				roundDataError,
-			);
-			// Continue without price data - the feed metadata is still valuable
+		// Check if all calls succeeded
+		if (results.some((result) => result.status === "failure")) {
+			console.error(`Some metadata calls failed for ${address}`);
 		}
 
 		return {
-			description,
-			decimals,
-			version,
-			latestPrice,
-			lastUpdated,
+			description: results[0].result as string,
+			decimals: results[1].result as number,
+			version: Number(results[2].result),
+			aggregatorAddress: results[3].result as string,
 		};
 	} catch (error) {
-		console.error(`Failed to fetch basic metadata for ${address}:`, error);
-		return null;
+		console.error(
+			`Failed to fetch metadata with multicall for ${address}:`,
+			error,
+		);
 	}
 }
 
-export async function fetchDataFeedDescription(
-	context: Context,
-	address: `0x${string}`,
-): Promise<string> {
-	try {
-		const description = await context.client.readContract({
-			address,
-			abi: AggregatorV3Abi,
-			functionName: "description",
-		});
-		return description;
-	} catch (error) {
-		console.error(`Failed to fetch description for ${address}:`, error);
-		return "";
-	}
+/**
+ * Check if a data feed should be ignored based on its description
+ */
+export function shouldIgnoreFeed(description: string): boolean {
+	const desc = description.toLowerCase();
+
+	return (
+		// Health/Status feeds
+		desc.includes("healthcheck") ||
+		desc.includes("uptime") ||
+		desc.includes("sequencer") ||
+		desc.includes("l2 sequencer") ||
+		// Proof of Reserve feeds
+		desc.endsWith(" por") ||
+		desc.includes("proof of reserve") ||
+		desc.includes(" por ") ||
+		// Protocol metrics
+		desc.includes("debt ratio") ||
+		desc.includes("total marketcap") ||
+		desc.includes("total supply") ||
+		desc.includes("defi pulse") ||
+		// Gas/Network feeds
+		desc.includes("gas") ||
+		desc.includes("gwei") ||
+		desc.includes("fast gas") ||
+		// Legacy filters
+		desc.includes("emergency count") ||
+		desc.includes("network") ||
+		desc.includes("count") ||
+		// Economic indicators and indices
+		desc.includes("consumer price index") ||
+		desc.includes("secured overnight financing rate") ||
+		desc.includes("calculated") ||
+		desc.includes(" reserves") ||
+		desc.includes(" nav") ||
+		desc.includes(" aum") ||
+		// Specific nonsensical feeds
+		desc.includes("aave llamarisk") ||
+		desc.includes("nexus weth") ||
+		desc.includes("synthetix aggregator issued synths")
+	);
 }
 
 export function parseTokensFromDescription(description: string): string[] {
 	if (!description) return [];
 
-	// Skip non-price feed descriptions
-	if (
-		description.includes("Emergency Count") ||
-		description.includes("Network") ||
-		description.includes("Healthcheck") ||
-		description.includes("Count")
-	) {
+	// Skip non-price feed descriptions using centralized logic
+	if (shouldIgnoreFeed(description)) {
 		return [];
 	}
 

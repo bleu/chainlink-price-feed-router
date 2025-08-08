@@ -10,9 +10,9 @@ import {
 	createDataFeedId,
 	createDataFeedTokenId,
 	createTokenId,
-	fetchDataFeedMetadata,
-	formatPrice,
+	fetchDataFeedMetadataWithAggregator,
 	parseTokensFromDescription,
+	shouldIgnoreFeed,
 } from "./utils/dataFeedUtils";
 import { findTokenBySymbol } from "./utils/tokenRegistry";
 
@@ -25,8 +25,8 @@ async function processDataFeedCreation(
 	const dataFeedId = createDataFeedId(chainId, address);
 
 	try {
-		// Fetch enhanced metadata from the aggregator contract
-		const metadata = await fetchDataFeedMetadata(
+		// Fetch enhanced metadata and aggregator address in a single multicall
+		const metadata = await fetchDataFeedMetadataWithAggregator(
 			context,
 			address as `0x${string}`,
 		);
@@ -38,13 +38,9 @@ async function processDataFeedCreation(
 			return;
 		}
 
-		// Skip non-price feed descriptions (emergency counts, etc.)
-		if (
-			metadata.description.includes("Emergency Count") ||
-			metadata.description.includes("Network") ||
-			metadata.description.includes("Count")
-		) {
-			console.log(`Skipping non-price feed: ${metadata.description}`);
+		// Skip non-price feed descriptions
+		if (shouldIgnoreFeed(metadata.description)) {
+			console.log(`⏭️ Skipping non-price feed: ${metadata.description}`);
 			return;
 		}
 
@@ -53,14 +49,15 @@ async function processDataFeedCreation(
 			await context.db.insert(dataFeed).values({
 				id: dataFeedId,
 				address: address.toLowerCase(),
+				aggregatorAddress: metadata.aggregatorAddress?.toLowerCase() || null,
 				description: metadata.description,
 				chainId,
 				status: "active",
 				decimals: metadata.decimals,
 				version: metadata.version,
-				latestPrice: metadata.latestPrice.toString(),
-				formattedPrice: formatPrice(metadata.latestPrice, metadata.decimals),
-				lastUpdated: metadata.lastUpdated,
+				latestPrice: "0", // Will be populated by price update events
+				formattedPrice: "0", // Will be populated by price update events
+				lastUpdated: 0n, // Will be populated by price update events
 				createdAt: timestamp,
 			});
 		} catch (_error) {
@@ -68,7 +65,6 @@ async function processDataFeedCreation(
 			return;
 		}
 
-		// Parse tokens from description
 		const tokens = parseTokensFromDescription(metadata.description);
 
 		for (let i = 0; i < tokens.length; i++) {

@@ -1,12 +1,16 @@
-import { db, publicClients } from "ponder:api";
+import { db } from "ponder:api";
 import schema from "ponder:schema";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { and, client, eq, graphql } from "ponder";
-import type { PublicClient } from "viem";
-import { AggregatorV3Abi } from "../../abis/AggregatorV3Abi";
+import { and, client, desc, eq, graphql } from "ponder";
 import config from "../../ponder.config";
-import { dataFeed, dataFeedToken, token } from "../../ponder.schema";
+import {
+	dataFeed,
+	dataFeedToken,
+	priceUpdate,
+	token,
+} from "../../ponder.schema";
+import { formatPrice } from "../utils/dataFeedUtils";
 
 const app = new Hono();
 
@@ -36,76 +40,62 @@ function scalePrice(
 	return price;
 }
 
-function formatPrice(price: string, decimals: number): string {
-	const priceNum = BigInt(price);
-	const divisor = 10n ** BigInt(decimals);
-	const wholePart = priceNum / divisor;
-	const fractionalPart = priceNum % divisor;
+// formatPrice is now imported from utils/dataFeedUtils
 
-	if (fractionalPart === 0n) {
-		return wholePart.toString();
-	}
-
-	const fractionalStr = fractionalPart.toString().padStart(decimals, "0");
-	const trimmedFractional = fractionalStr.replace(/0+$/, "");
-
-	if (trimmedFractional === "") {
-		return wholePart.toString();
-	}
-
-	return `${wholePart}.${trimmedFractional}`;
-}
-
-async function fetchPriceData(client: PublicClient, address: string) {
+async function fetchPriceDataFromDB(
+	chainId: number,
+	aggregatorAddress: string,
+) {
 	try {
-		// Fetch decimals first (should not revert)
-		const decimals = await client.readContract({
-			address: address as `0x${string}`,
-			abi: AggregatorV3Abi,
-			functionName: "decimals",
-		});
+		// Get the latest price update for this aggregator
+		const latestPrice = await db
+			.select({
+				price: priceUpdate.price,
+				decimals: priceUpdate.decimals,
+				updatedAt: priceUpdate.updatedAt,
+				timestamp: priceUpdate.timestamp,
+				aggregatorAddress: priceUpdate.aggregatorAddress,
+			})
+			.from(priceUpdate)
+			.where(
+				and(
+					eq(priceUpdate.chainId, chainId),
+					eq(priceUpdate.aggregatorAddress, aggregatorAddress.toLowerCase()),
+				),
+			)
+			.orderBy(desc(priceUpdate.timestamp))
+			.limit(1);
 
-		// Try to fetch latest round data with proper error handling
-		try {
-			const latestRoundData = await client.readContract({
-				address: address as `0x${string}`,
-				abi: AggregatorV3Abi,
-				functionName: "latestRoundData",
-			});
-
-			// Validate the round data
-			const [roundId, answer, _startedAt, updatedAt, _answeredInRound] =
-				latestRoundData;
-
-			// Check for invalid data conditions
-			if (roundId === 0n || updatedAt === 0n || answer === 0n) {
-				console.warn(
-					`Invalid round data for ${address}: roundId=${roundId}, answer=${answer}, updatedAt=${updatedAt}`,
-				);
-				return null;
-			}
-
-			// Check if data is too stale (older than 24 hours for most feeds)
-			const currentTime = BigInt(Math.floor(Date.now() / 1000));
-			const dataAge = currentTime - updatedAt;
-			if (dataAge > 86400n) {
-				// 24 hours in seconds
-				console.warn(`Stale price data for ${address}: ${dataAge} seconds old`);
-				// Still return the data but with a warning
-			}
-
-			return {
-				price: answer,
-				decimals,
-				updatedAt,
-				address,
-			};
-		} catch (roundDataError) {
-			console.error(`latestRoundData reverted for ${address}:`, roundDataError);
+		if (!latestPrice || latestPrice.length === 0) {
+			console.warn(
+				`No price data found for aggregator ${aggregatorAddress} on chain ${chainId}`,
+			);
 			return null;
 		}
+
+		const priceData = latestPrice[0];
+
+		// Check if data is too stale (older than 24 hours for most feeds)
+		const currentTime = BigInt(Math.floor(Date.now() / 1000));
+		const dataAge = currentTime - priceData.timestamp;
+		if (dataAge > 86400n) {
+			console.warn(
+				`Stale price data for ${aggregatorAddress}: ${dataAge} seconds old`,
+			);
+			// Still return the data but with a warning
+		}
+
+		return {
+			price: BigInt(priceData.price),
+			decimals: priceData.decimals || 8, // Default to 8 if null
+			updatedAt: priceData.updatedAt,
+			address: aggregatorAddress,
+		};
 	} catch (error) {
-		console.error(`Failed to fetch price data for ${address}:`, error);
+		console.error(
+			`Failed to fetch price data from DB for ${aggregatorAddress}:`,
+			error,
+		);
 		return null;
 	}
 }
@@ -317,11 +307,9 @@ priceApi.get("/quote/:chainId/:fromToken/:toToken", async (c) => {
 			return c.json({ error: "Missing token symbols" }, 400);
 		}
 
+		// Validate that the chain is supported (check if it exists in our config)
 		const chainName = getChainSlugFromPonderConfig(chainId);
-
-		const client = publicClients[chainName as keyof typeof publicClients];
-
-		if (!client) {
+		if (!chainName) {
 			return c.json(
 				{
 					error: "Unsupported chain",
@@ -364,10 +352,33 @@ priceApi.get("/quote/:chainId/:fromToken/:toToken", async (c) => {
 			);
 		}
 
-		// Fetch price data for all conversions in the route
+		// Fetch price data for all conversions in the route using our indexed data
 		const priceDataPromises = route.conversions.map(
-			(conversion: { dataFeedAddress: string }) =>
-				fetchPriceData(client, conversion.dataFeedAddress),
+			async (conversion: { dataFeedAddress: string }) => {
+				// First get the aggregator address from the data feed
+				const feed = await db
+					.select({
+						aggregatorAddress: dataFeed.aggregatorAddress,
+					})
+					.from(dataFeed)
+					.where(
+						and(
+							eq(dataFeed.address, conversion.dataFeedAddress.toLowerCase()),
+							eq(dataFeed.chainId, chainId),
+						),
+					)
+					.limit(1);
+
+				if (!feed || feed.length === 0 || !feed[0]?.aggregatorAddress) {
+					console.warn(
+						`No aggregator address found for data feed ${conversion.dataFeedAddress}`,
+					);
+					return null;
+				}
+
+				// Now fetch the latest price data from our database
+				return fetchPriceDataFromDB(chainId, feed[0].aggregatorAddress);
+			},
 		);
 
 		const priceDataArray = await Promise.all(priceDataPromises);
@@ -420,7 +431,7 @@ priceApi.get("/quote/:chainId/:fromToken/:toToken", async (c) => {
 			toToken,
 			chainId,
 			price: resultAmount.toString(),
-			formattedPrice: formatPrice(resultAmount.toString(), targetDecimals),
+			formattedPrice: formatPrice(resultAmount, targetDecimals),
 			decimals: targetDecimals,
 			route: {
 				path: route.path,
@@ -445,7 +456,7 @@ priceApi.get("/quote/:chainId/:fromToken/:toToken", async (c) => {
 							conversionType: conversion.conversionType,
 							feedPrice: priceData.price.toString(),
 							feedFormattedPrice: formatPrice(
-								priceData.price.toString(),
+								priceData.price,
 								priceData.decimals,
 							),
 							decimals: priceData.decimals,
