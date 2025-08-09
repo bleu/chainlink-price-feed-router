@@ -5,10 +5,8 @@ import { cors } from "hono/cors";
 import { and, client, desc, eq, graphql } from "ponder";
 import config from "../../ponder.config";
 import {
-	aggregator,
 	dataFeed,
 	dataFeedToken,
-	newRound,
 	priceUpdate,
 	token,
 } from "../../ponder.schema";

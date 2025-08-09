@@ -1,8 +1,4 @@
-import { createClient, eq, and } from "@ponder/client";
 import type { AggregatorInfo } from "./types";
-
-// Import schema from shared utils package
-import * as schema from "../../../pkg/chainlink-utils/src/ponder.schema";
 
 export class AggregatorDiscovery {
 	private discoveredAggregators = new Map<string, AggregatorInfo>();
@@ -11,32 +7,42 @@ export class AggregatorDiscovery {
 	 * Discover aggregators from the flags database via SQL API
 	 */
 	async discoverFromDatabase(
-		apiUrl: string = "http://localhost:42069",
+		_apiUrl: string = "http://localhost:42069",
 	): Promise<AggregatorInfo[]> {
 		try {
-			console.log("🔍 Discovering aggregators from flags database via SQL endpoint...");
+			console.log(
+				"🔍 Discovering aggregators from flags database via direct database connection...",
+			);
 
-			// Create Ponder client pointing to the SQL endpoint
-			const client = createClient(`${apiUrl}/sql`, { schema });
+			// Connect directly to the database instead of using the API
+			const { Client } = await import("pg");
+			const client = new Client({
+				connectionString:
+					process.env.DATABASE_URL ||
+					"postgresql://postgres:postgres@localhost:5432/postgres",
+			});
 
-			// Query all active, non-ignored data feeds using Drizzle
-			const activeFeeds = await client.db
-				.select({
-					id: schema.dataFeed.id,
-					address: schema.dataFeed.address,
-					aggregatorAddress: schema.dataFeed.aggregatorAddress,
-					description: schema.dataFeed.description,
-					chainId: schema.dataFeed.chainId,
-					status: schema.dataFeed.status,
-					ignored: schema.dataFeed.ignored,
-				})
-				.from(schema.dataFeed)
-				.where(
-					and(
-						eq(schema.dataFeed.status, "active"),
-						eq(schema.dataFeed.ignored, false)
-					)
-				);
+			await client.connect();
+
+			const sqlQuery = `
+				SELECT 
+					id,
+					address,
+					aggregator_address,
+					description,
+					chain_id,
+					status,
+					ignored
+				FROM chainlink_registry_flags.data_feed 
+				WHERE status = 'active' 
+				AND ignored = false 
+				AND aggregator_address IS NOT NULL
+			`;
+
+			const result = await client.query(sqlQuery);
+			await client.end();
+
+			const activeFeeds = result.rows || [];
 
 			console.log(
 				`📊 Found ${activeFeeds.length} active, non-ignored data feeds`,
@@ -46,30 +52,30 @@ export class AggregatorDiscovery {
 			const chainIdToName = this.getChainIdToNameMapping();
 
 			for (const feed of activeFeeds) {
-				const chainName = chainIdToName[feed.chainId];
+				const chainName = chainIdToName[feed.chain_id];
 				if (!chainName) {
-					console.warn(`⚠️ Unknown chain ID: ${feed.chainId}`);
+					console.warn(`⚠️ Unknown chain ID: ${feed.chain_id}`);
 					continue;
 				}
 
-				// Skip feeds without aggregator address
-				if (!feed.aggregatorAddress) {
+				// Skip feeds without aggregator address (already filtered in SQL)
+				if (!feed.aggregator_address) {
 					console.warn(
-						`⚠️ No aggregator address for data feed ${feed.address} on chain ${feed.chainId}`,
+						`⚠️ No aggregator address for data feed ${feed.address} on chain ${feed.chain_id}`,
 					);
 					continue;
 				}
 
 				const aggregatorInfo: AggregatorInfo = {
-					address: feed.aggregatorAddress, // Use aggregator address, not data feed address
+					address: feed.aggregator_address, // Use aggregator address, not data feed address
 					description: feed.description,
-					chainId: feed.chainId,
+					chainId: feed.chain_id,
 					chainName,
 					status: "active",
 					discoveredAt: Date.now(),
 				};
 
-				const key = `${feed.chainId}-${feed.aggregatorAddress}`;
+				const key = `${feed.chain_id}-${feed.aggregator_address}`;
 				this.discoveredAggregators.set(key, aggregatorInfo);
 				aggregators.push(aggregatorInfo);
 			}

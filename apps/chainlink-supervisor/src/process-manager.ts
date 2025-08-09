@@ -1,15 +1,60 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ProcessInfo } from "./types";
 
-export class ProcessManager {
+export class ProcessManager extends EventEmitter {
 	private processes = new Map<string, ChildProcess>();
 	private processInfo = new Map<string, ProcessInfo>();
 	private appPath: string;
 	private appName: string;
+	private envVars: Record<string, string> = {};
+	private lastServerMessage: string = "";
+	private lastProgressUpdate: number = 0;
 
 	constructor(appPath: string, appName: string) {
+		super();
 		this.appPath = appPath;
 		this.appName = appName;
+		this.loadEnvironmentVariables();
+	}
+
+	/**
+	 * Load environment variables from .envrc file
+	 */
+	private loadEnvironmentVariables(): void {
+		try {
+			const envrcPath = join(this.appPath, ".envrc");
+			const envrcContent = readFileSync(envrcPath, "utf-8");
+
+			// Parse .envrc file
+			const lines = envrcContent.split("\n");
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed.startsWith("export ") && trimmed.includes("=")) {
+					const exportLine = trimmed.substring(7); // Remove 'export '
+					const [key, ...valueParts] = exportLine.split("=");
+					let value = valueParts.join("=");
+
+					// Remove quotes if present
+					if (
+						(value.startsWith('"') && value.endsWith('"')) ||
+						(value.startsWith("'") && value.endsWith("'"))
+					) {
+						value = value.slice(1, -1);
+					}
+
+					this.envVars[key] = value;
+				}
+			}
+
+			console.log(
+				`📋 Loaded ${Object.keys(this.envVars).length} environment variables for ${this.appName}`,
+			);
+		} catch (error) {
+			console.warn(`⚠️ Could not load .envrc for ${this.appName}:`, error);
+		}
 	}
 
 	/**
@@ -19,13 +64,17 @@ export class ProcessManager {
 		console.log(`🚀 Starting ${this.appName} indexer...`);
 
 		try {
-			const childProcess = spawn("pnpm", ["ponder", "start"], {
+			const childProcess = spawn("pnpm", ["dev"], {
 				cwd: this.appPath,
 				stdio: ["ignore", "pipe", "pipe"],
 				env: {
 					...process.env,
-					DATABASE_URL: process.env.DATABASE_URL,
-					DRPC_API_KEY: process.env.DRPC_API_KEY,
+					...this.envVars, // Load from .envrc
+					// Override with any supervisor-level env vars
+					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
+					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
+					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
+					PONDER_PORT: this.envVars.PONDER_PORT,
 				},
 			});
 
@@ -38,11 +87,61 @@ export class ProcessManager {
 				restarts: 0,
 			});
 
-			// Handle process output
+			// Handle process output with aggressive filtering
 			childProcess.stdout?.on("data", (data) => {
-				console.log(
-					`[${this.appName.toUpperCase()} INDEXER] ${data.toString().trim()}`,
-				);
+				const output = data.toString();
+
+				// Check for sync completion first (before filtering)
+				// Don't emit syncComplete - let the supervisor check the /ready endpoint instead
+				// The indexer reports "sync complete" too early before all events are processed
+
+				// Only show important messages - be very selective
+				const lines = output.split("\n");
+
+				for (const line of lines) {
+					const cleanLine = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").trim();
+
+					// Only log these specific important patterns:
+					if (
+						cleanLine.includes("PM INFO") ||
+						cleanLine.includes("PM WARN") ||
+						cleanLine.includes("PM ERROR") ||
+						cleanLine.includes("> ponder dev") ||
+						cleanLine.includes("> @chainlink-registry") ||
+						cleanLine.startsWith("Started") ||
+						cleanLine.includes("historical sync with") ||
+						cleanLine.includes("Created tables") ||
+						cleanLine.includes("Using database") ||
+						cleanLine.includes("Started listening on port") ||
+						cleanLine.includes("Started returning 200 responses") ||
+						(cleanLine.startsWith("Server live at") &&
+							this.lastServerMessage !== cleanLine)
+					) {
+						console.log(`[${this.appName.toUpperCase()} INDEXER] ${cleanLine}`);
+
+						// Remember server messages
+						if (cleanLine.startsWith("Server live at")) {
+							this.lastServerMessage = cleanLine;
+						}
+					}
+				}
+
+				// Show periodic progress summary (very infrequent)
+				const now = Date.now();
+				if (now - this.lastProgressUpdate > 30000) {
+					// Every 30 seconds
+					if (output.includes("historical") && output.includes("100%")) {
+						console.log(
+							`[${this.appName.toUpperCase()} INDEXER] 📊 Historical sync complete, waiting for indexing function to complete...`,
+						);
+						this.lastProgressUpdate = now;
+					} else if (output.includes("historical")) {
+						console.log(
+							`[${this.appName.toUpperCase()} INDEXER] 📊 Historical sync in progress...`,
+						);
+						this.lastProgressUpdate = now;
+					}
+				}
 			});
 
 			childProcess.stderr?.on("data", (data) => {
@@ -96,8 +195,12 @@ export class ProcessManager {
 				stdio: ["ignore", "pipe", "pipe"],
 				env: {
 					...process.env,
-					DATABASE_URL: process.env.DATABASE_URL,
-					DRPC_API_KEY: process.env.DRPC_API_KEY,
+					...this.envVars, // Load from .envrc
+					// Override with any supervisor-level env vars
+					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
+					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
+					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
+					PONDER_PORT: this.envVars.PONDER_PORT,
 				},
 			});
 
