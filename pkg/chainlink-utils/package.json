@@ -1,0 +1,21 @@
+{
+	"name": "@chainlink-registry/utils",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/ponder.schema.ts",
+		"./dataFeedUtils": "./src/dataFeedUtils.ts",
+		"./tokenRegistry": "./src/tokenRegistry.ts"
+	},
+	"dependencies": {
+		"ponder": "^0.12.2",
+		"viem": "^2.33.3"
+	},
+	"devDependencies": {
+		"@types/node": "^24.2.1",
+		"typescript": "^5.9.2"
+	}
+}
