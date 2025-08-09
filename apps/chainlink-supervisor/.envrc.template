@@ -1,0 +1,12 @@
+# Database
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/chainlink_registry"
+
+# RPC Access
+export DRPC_API_KEY="your_drpc_api_key_here"
+
+# Supervisor Configuration
+export FLAGS_API_URL="http://localhost:42069"
+export AGGREGATORS_API_URL="http://localhost:42070"
+export CHECK_INTERVAL="30000"
+export RESTART_DELAY="5000"
+export MAX_RETRIES="3"

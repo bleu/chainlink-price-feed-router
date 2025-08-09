@@ -1,26 +1,59 @@
 # Chainlink Registry
 
-A comprehensive monorepo for indexing and accessing Chainlink price feeds across multiple blockchain networks.
+A comprehensive dual-process indexing system for Chainlink data feeds and price aggregators across multiple chains.
 
 ## 🏗️ Architecture
 
-This monorepo contains two main components:
+```
+┌─────────────────────┐    ┌─────────────────────────┐
+│  Flags Indexer      │    │  Aggregators Indexer    │
+│  (Port 42069)       │    │  (Port 42070)           │
+│                     │    │                         │
+│ - Index flags only  │    │ - Index flags + aggs    │
+│ - Discover aggs     │    │ - Complete dataset      │
+│ - Lightweight       │    │ - Updated dynamically   │
+└─────────────────────┘    └─────────────────────────┘
+         │                           ▲
+         │ Discovers new aggregators │
+         └───────────────────────────┘
+                    │
+         ┌─────────────────────┐
+         │    Supervisor       │
+         │                     │
+         │ - Polls flags DB    │
+         │ - Updates agg config│
+         │ - Manages processes │
+         └─────────────────────┘
+```
 
-### 📊 **Indexer** (`apps/chainlink-registry-indexer/`)
-A [Ponder](https://ponder.sh) application that discovers and indexes official Chainlink price feeds across 17+ blockchain networks.
+This monorepo contains three main applications:
+
+### 🏁 **Flags Indexer** (`apps/chainlink-flags-indexer/`)
+Lightweight indexer that processes only Chainlink flag events to discover aggregators.
 
 **Key Features:**
-- **Multi-chain indexing** - Tracks price feeds across Ethereum, Base, Arbitrum, Polygon, and 13+ other chains
-- **Official feed discovery** - Only indexes feeds verified by Chainlink's Flags Contract Registry
-- **Real-time monitoring** - Processes `FlagRaised`/`FlagLowered` events to track feed status
-- **Price calculation API** - REST endpoints with BFS pathfinding for cross-token pricing
-- **Robust error handling** - Gracefully handles stale feeds and RPC failures
+- **Flags-only indexing** - Processes FlagRaised/FlagLowered events
+- **Aggregator discovery** - Finds aggregator addresses from flag events  
+- **Lightweight & fast** - Minimal resource usage for quick discovery
+- **Always running** - Provides continuous discovery of new aggregators
 
-**API Endpoints:**
-- `GET /price/quote/:chainId/:fromToken/:toToken` - Get price quote between tokens
-- `GET /price/tokens/:chainId` - List available tokens for a chain
-- `GET /price/health` - API health check
-- `GET /graphql` - GraphQL endpoint for raw data access
+### 📊 **Aggregators Indexer** (`apps/chainlink-aggregators-indexer/`)
+Full-featured indexer that processes both flag events and aggregator price events.
+
+**Key Features:**
+- **Complete dataset** - Indexes both flags and aggregator events
+- **Price tracking** - Tracks AnswerUpdated and NewRound events
+- **Dynamic config** - Aggregator addresses added dynamically by supervisor
+- **Price quote API** - REST endpoints with BFS pathfinding for cross-token pricing
+
+### 🎛️ **Supervisor** (`apps/chainlink-supervisor/`)
+Orchestrates both indexers and manages the discovery process.
+
+**Key Features:**
+- **Process management** - Starts, stops, and monitors both indexers
+- **Discovery polling** - Polls flags database for new aggregators
+- **Config updates** - Updates aggregator indexer config dynamically
+- **Health monitoring** - Automatic restart and fault tolerance
 
 ### 🛠️ **SDK** (`pkg/sdk/`)
 A TypeScript SDK that provides a clean, type-safe interface for consuming the price API.
@@ -30,22 +63,43 @@ A TypeScript SDK that provides a clean, type-safe interface for consuming the pr
 - **Modern API** - Promise-based with async/await support
 - **Batch operations** - Fetch multiple quotes in parallel
 - **Error handling** - Specific error classes for different failure scenarios
-- **Utilities** - Helper functions for price formatting and route analysis
-- **Examples** - Ready-to-use examples including portfolio tracking
 
 ## 🚀 Quick Start
 
-### Running the Indexer
+### Option 1: Supervisor Mode (Recommended)
 
 ```bash
-cd apps/chainlink-registry-indexer
-cp .envrc.template .envrc
-# Add your DRPC_API_KEY to .envrc
+# Install dependencies
 pnpm install
-pnpm dev
+
+# Set up environment files
+cp apps/chainlink-flags-indexer/.envrc.template apps/chainlink-flags-indexer/.envrc
+cp apps/chainlink-aggregators-indexer/.envrc.template apps/chainlink-aggregators-indexer/.envrc  
+cp apps/chainlink-supervisor/.envrc.template apps/chainlink-supervisor/.envrc
+
+# Edit .envrc files with your database URL and DRPC API key
+
+# Start the supervisor (manages everything)
+cd apps/chainlink-supervisor
+pnpm start
 ```
 
-The API will be available at `http://localhost:42069`
+### Option 2: Manual Mode
+
+```bash
+# Terminal 1: Flags indexer
+cd apps/chainlink-flags-indexer && pnpm dev
+
+# Terminal 2: Aggregators indexer
+cd apps/chainlink-aggregators-indexer && pnpm dev
+
+# Terminal 3: Supervisor  
+cd apps/chainlink-supervisor && pnpm dev
+```
+
+**APIs will be available at:**
+- Flags Indexer: `http://localhost:42069`
+- Aggregators Indexer: `http://localhost:42070`
 
 ### Using the SDK
 

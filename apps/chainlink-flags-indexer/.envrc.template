@@ -1,0 +1,9 @@
+# Database
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/chainlink_registry"
+export DATABASE_SCHEMA="chainlink_registry_flags"
+
+# RPC Access
+export DRPC_API_KEY="your_drpc_api_key_here"
+
+# Ponder Configuration
+export PONDER_PORT="42069"
