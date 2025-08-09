@@ -5,3 +5,6 @@ packages:
 onlyBuiltDependencies:
   - '@biomejs/biome'
   - esbuild
+
+patchedDependencies:
+  ponder: patches/ponder.patch

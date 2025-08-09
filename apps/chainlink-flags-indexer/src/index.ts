@@ -1,5 +1,6 @@
 import { type Context, ponder } from "ponder:registry";
 import {
+	aggregator,
 	dataFeed,
 	dataFeedToken,
 	flagLowered,
@@ -64,6 +65,24 @@ async function processDataFeedCreation(
 		} catch (_error) {
 			// Data feed already exists, skip processing
 			return;
+		}
+
+		// Create aggregator record if we have an aggregator address
+		if (metadata.aggregatorAddress && !isIgnored) {
+			const aggregatorId = `${chainId}-${metadata.aggregatorAddress.toLowerCase()}`;
+			
+			await context.db.insert(aggregator).values({
+				id: aggregatorId,
+				address: metadata.aggregatorAddress.toLowerCase(),
+				dataFeedId,
+				chainId,
+				description: metadata.description,
+				decimals: metadata.decimals,
+				status: "active",
+				createdAt: timestamp,
+			}).onConflictDoNothing();
+			
+			console.info(`🔗 Created aggregator record: ${metadata.aggregatorAddress} -> ${metadata.description}`);
 		}
 
 		// Only process tokens for non-ignored feeds

@@ -1,5 +1,6 @@
 import { type Context, ponder } from "ponder:registry";
 import {
+	aggregator,
 	dataFeed,
 	dataFeedToken,
 	flagLowered,
@@ -17,25 +18,6 @@ import {
 	shouldIgnoreFeed,
 } from "./utils/dataFeedUtils";
 import { findTokenBySymbol } from "./utils/tokenRegistry";
-
-// Helper to format price with decimals
-function formatPrice(rawPrice: string, decimals: number): string {
-	if (decimals === 0) return rawPrice;
-
-	const price = BigInt(rawPrice);
-	const divisor = BigInt(10 ** decimals);
-	const wholePart = price / divisor;
-	const fractionalPart = price % divisor;
-
-	if (fractionalPart === 0n) {
-		return wholePart.toString();
-	}
-
-	const fractionalStr = fractionalPart.toString().padStart(decimals, "0");
-	const trimmedFractional = fractionalStr.replace(/0+$/, "");
-
-	return `${wholePart}.${trimmedFractional}`;
-}
 
 async function processDataFeedCreation(
 	address: string,
@@ -85,6 +67,24 @@ async function processDataFeedCreation(
 		} catch (_error) {
 			// Data feed already exists, skip processing
 			return;
+		}
+
+		// Create aggregator record if we have an aggregator address
+		if (metadata.aggregatorAddress && !isIgnored) {
+			const aggregatorId = `${chainId}-${metadata.aggregatorAddress.toLowerCase()}`;
+			
+			await context.db.insert(aggregator).values({
+				id: aggregatorId,
+				address: metadata.aggregatorAddress.toLowerCase(),
+				dataFeedId,
+				chainId,
+				description: metadata.description,
+				decimals: metadata.decimals,
+				status: "active",
+				createdAt: timestamp,
+			}).onConflictDoNothing();
+			
+			console.info(`🔗 Created aggregator record: ${metadata.aggregatorAddress} -> ${metadata.description}`);
 		}
 
 		// Only process tokens for non-ignored feeds
@@ -216,17 +216,17 @@ ponder.on(
 	"AccessControlledOffchainAggregator:AnswerUpdated",
 	async ({ event, context }: any) => {
 		const aggregatorAddress = event.log.address.toLowerCase();
+		const aggregatorId = `${context.chain.id}-${aggregatorAddress}`;
 
-		// Create price update record
+		// Create price update record with direct aggregator reference
+		// The aggregator record should already exist from flags indexer
 		await context.db.insert(priceUpdate).values({
 			id: `${context.chain.id}-${event.block.hash}-${event.log.logIndex}`,
-			aggregatorAddress,
-			dataFeedId: null, // Will be linked later if we find the data feed
+			aggregatorId, // Direct reference to aggregator table
+			aggregatorAddress, // Kept for convenience
 			chainId: context.chain.id,
 			roundId: event.args.roundId,
 			price: event.args.current.toString(),
-			formattedPrice: null, // Will be set when we know decimals
-			decimals: null, // Will be fetched from data feed
 			updatedAt: event.args.updatedAt,
 			blockNumber: event.block.number,
 			blockHash: event.block.hash,
@@ -234,51 +234,6 @@ ponder.on(
 			logIndex: event.log.logIndex,
 			timestamp: event.block.timestamp,
 		});
-
-		// Try to find and update the corresponding data feed
-		try {
-			// Look for data feed with this aggregator address
-			const dataFeeds = await context.db
-				.select()
-				.from(dataFeed)
-				.where({
-					aggregatorAddress,
-					chainId: context.chain.id,
-					status: "active",
-					ignored: false,
-				})
-				.limit(1);
-
-			if (dataFeeds.length > 0) {
-				const feed = dataFeeds[0];
-				const formattedPrice = feed.decimals
-					? formatPrice(event.args.current.toString(), feed.decimals)
-					: event.args.current.toString();
-
-				// Update the data feed with latest price
-				await context.db.update(dataFeed, { id: feed.id }).set({
-					latestPrice: event.args.current.toString(),
-					formattedPrice,
-					lastUpdated: event.args.updatedAt,
-				});
-
-				// Update the price update record with data feed info
-				await context.db
-					.update(priceUpdate, {
-						id: `${context.chain.id}-${event.block.hash}-${event.log.logIndex}`,
-					})
-					.set({
-						dataFeedId: feed.id,
-						decimals: feed.decimals,
-						formattedPrice,
-					});
-			}
-		} catch (error) {
-			console.error(
-				`Failed to update data feed for aggregator ${aggregatorAddress}:`,
-				error,
-			);
-		}
 	},
 );
 
@@ -287,12 +242,14 @@ ponder.on(
 	"AccessControlledOffchainAggregator:NewRound",
 	async ({ event, context }: any) => {
 		const aggregatorAddress = event.log.address.toLowerCase();
+		const aggregatorId = `${context.chain.id}-${aggregatorAddress}`;
 
-		// Create new round record
+		// Create new round record with direct aggregator reference
+		// The aggregator record should already exist from flags indexer
 		await context.db.insert(newRound).values({
 			id: `${context.chain.id}-${event.block.hash}-${event.log.logIndex}`,
-			aggregatorAddress,
-			dataFeedId: null, // Will be linked later if we find the data feed
+			aggregatorId, // Direct reference to aggregator table
+			aggregatorAddress, // Kept for convenience
 			chainId: context.chain.id,
 			roundId: event.args.roundId,
 			startedBy: event.args.startedBy,
@@ -303,34 +260,5 @@ ponder.on(
 			logIndex: event.log.logIndex,
 			timestamp: event.block.timestamp,
 		});
-
-		// Try to link to data feed
-		try {
-			const dataFeeds = await context.db
-				.select()
-				.from(dataFeed)
-				.where({
-					aggregatorAddress,
-					chainId: context.chain.id,
-					status: "active",
-					ignored: false,
-				})
-				.limit(1);
-
-			if (dataFeeds.length > 0) {
-				await context.db
-					.update(newRound, {
-						id: `${context.chain.id}-${event.block.hash}-${event.log.logIndex}`,
-					})
-					.set({
-						dataFeedId: dataFeeds[0].id,
-					});
-			}
-		} catch (error) {
-			console.error(
-				`Failed to link new round to data feed for aggregator ${aggregatorAddress}:`,
-				error,
-			);
-		}
 	},
 );

@@ -54,6 +54,18 @@ export const dataFeedToken = onchainTable("data_feed_token", (t) => ({
 	position: t.integer().notNull(), // 0 for base token, 1 for quote token
 }));
 
+// Aggregator table - created when processing data feeds with aggregator addresses
+export const aggregator = onchainTable("aggregator", (t) => ({
+	id: t.text().primaryKey(), // chainId-aggregatorAddress
+	address: t.text().notNull(),
+	dataFeedId: t.text().notNull(), // Reference to the data feed
+	chainId: t.integer().notNull(),
+	description: t.text(),
+	decimals: t.integer(),
+	status: t.text().notNull().default("active"),
+	createdAt: t.bigint().notNull(),
+}));
+
 export const dataFeedRelations = relations(dataFeed, ({ many }) => ({
 	dataFeedTokens: many(dataFeedToken),
 }));

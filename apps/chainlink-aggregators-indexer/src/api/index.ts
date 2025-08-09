@@ -5,8 +5,10 @@ import { cors } from "hono/cors";
 import { and, client, desc, eq, graphql } from "ponder";
 import config from "../../ponder.config";
 import {
+	aggregator,
 	dataFeed,
 	dataFeedToken,
+	newRound,
 	priceUpdate,
 	token,
 } from "../../ponder.schema";
@@ -553,7 +555,7 @@ priceApi.get("/", (c) => {
 // Mount price API
 app.route("/price", priceApi);
 
-// Existing endpoints
+// Standard endpoints - users can query aggregator relations via GraphQL/SQL
 app.use("/sql/*", client({ db, schema }));
 app.use("/", graphql({ db, schema }));
 app.use("/graphql", graphql({ db, schema }));

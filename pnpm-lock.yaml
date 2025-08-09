@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  ponder:
+    hash: 381d70b01eae0bc6411487d056b83c520b007ea559126d4a4ccc7fadde1b8971
+    path: patches/ponder.patch
+
 importers:
 
   .:
@@ -15,26 +20,26 @@ importers:
   apps/chainlink-aggregators-indexer:
     dependencies:
       '@ponder/client':
-        specifier: ^0.12.0
+        specifier: ^0.12.2
         version: 0.12.2(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(kysely@0.26.3)(pg@8.16.3)(typescript@5.9.2)
       cross-fetch:
-        specifier: ^4.0.0
+        specifier: ^4.1.0
         version: 4.1.0
       hono:
         specifier: ^4.9.0
         version: 4.9.0
       ponder:
-        specifier: ^0.12.0
-        version: 0.12.2(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
+        specifier: ^0.12.2
+        version: 0.12.2(patch_hash=381d70b01eae0bc6411487d056b83c520b007ea559126d4a4ccc7fadde1b8971)(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
       viem:
         specifier: ^2.33.3
         version: 2.33.3(typescript@5.9.2)
     devDependencies:
       '@types/node':
-        specifier: ^24.2.0
+        specifier: ^24.2.1
         version: 24.2.1
       tsx:
-        specifier: ^4.0.0
+        specifier: ^4.20.3
         version: 4.20.3
       typescript:
         specifier: ^5.9.2
@@ -43,23 +48,23 @@ importers:
   apps/chainlink-flags-indexer:
     dependencies:
       '@ponder/client':
-        specifier: ^0.12.0
+        specifier: ^0.12.2
         version: 0.12.2(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(kysely@0.26.3)(pg@8.16.3)(typescript@5.9.2)
       hono:
         specifier: ^4.9.0
         version: 4.9.0
       ponder:
-        specifier: ^0.12.0
-        version: 0.12.2(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
+        specifier: ^0.12.2
+        version: 0.12.2(patch_hash=381d70b01eae0bc6411487d056b83c520b007ea559126d4a4ccc7fadde1b8971)(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
       viem:
         specifier: ^2.33.3
         version: 2.33.3(typescript@5.9.2)
     devDependencies:
       '@types/node':
-        specifier: ^24.2.0
+        specifier: ^24.2.1
         version: 24.2.1
       tsx:
-        specifier: ^4.0.0
+        specifier: ^4.20.3
         version: 4.20.3
       typescript:
         specifier: ^5.9.2
@@ -68,20 +73,20 @@ importers:
   apps/chainlink-supervisor:
     dependencies:
       '@ponder/client':
-        specifier: ^0.12.0
+        specifier: ^0.12.2
         version: 0.12.2(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(kysely@0.26.3)(pg@8.16.3)(typescript@5.9.2)
       cross-fetch:
-        specifier: ^4.0.0
+        specifier: ^4.1.0
         version: 4.1.0
       viem:
         specifier: ^2.33.3
         version: 2.33.3(typescript@5.9.2)
     devDependencies:
       '@types/node':
-        specifier: ^24.2.0
+        specifier: ^24.2.1
         version: 24.2.1
       tsx:
-        specifier: ^4.0.0
+        specifier: ^4.20.3
         version: 4.20.3
       typescript:
         specifier: ^5.9.2
@@ -91,7 +96,7 @@ importers:
     dependencies:
       ponder:
         specifier: ^0.12.2
-        version: 0.12.2(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
+        version: 0.12.2(patch_hash=381d70b01eae0bc6411487d056b83c520b007ea559126d4a4ccc7fadde1b8971)(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2))
       viem:
         specifier: ^2.33.3
         version: 2.33.3(typescript@5.9.2)
@@ -3791,7 +3796,7 @@ snapshots:
       mlly: 1.7.4
       pathe: 2.0.3
 
-  ponder@0.12.2(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2)):
+  ponder@0.12.2(patch_hash=381d70b01eae0bc6411487d056b83c520b007ea559126d4a4ccc7fadde1b8971)(@opentelemetry/api@1.9.0)(@types/node@24.2.1)(hono@4.9.0)(typescript@5.9.2)(viem@2.33.3(typescript@5.9.2)):
     dependencies:
       '@babel/code-frame': 7.27.1
       '@commander-js/extra-typings': 12.1.0(commander@12.1.0)

@@ -13,13 +13,13 @@
 		"generate-config": "tsx src/generate-config.ts"
 	},
 	"dependencies": {
-		"@ponder/client": "^0.12.0",
-		"cross-fetch": "^4.0.0",
+		"@ponder/client": "^0.12.2",
+		"cross-fetch": "^4.1.0",
 		"viem": "^2.33.3"
 	},
 	"devDependencies": {
-		"@types/node": "^24.2.0",
-		"tsx": "^4.0.0",
+		"@types/node": "^24.2.1",
+		"tsx": "^4.20.3",
 		"typescript": "^5.9.2"
 	}
 }

@@ -73,11 +73,23 @@ export const dataFeedTokenRelations = relations(dataFeedToken, ({ one }) => ({
 	}),
 }));
 
-// Aggregator price update events
+// Aggregator table - created when processing flags, referenced by price updates
+export const aggregator = onchainTable("aggregator", (t) => ({
+	id: t.text().primaryKey(), // chainId-aggregatorAddress
+	address: t.text().notNull(),
+	dataFeedId: t.text().notNull(), // Reference to the data feed
+	chainId: t.integer().notNull(),
+	description: t.text(),
+	decimals: t.integer(),
+	status: t.text().notNull().default("active"),
+	createdAt: t.bigint().notNull(),
+}));
+
+// Aggregator price update events - directly references aggregator table
 export const priceUpdate = onchainTable("price_update", (t) => ({
 	id: t.text().primaryKey(),
-	aggregatorAddress: t.text().notNull(),
-	dataFeedId: t.text(), // Reference to data_feed if known
+	aggregatorId: t.text().notNull(), // Direct reference to aggregator table
+	aggregatorAddress: t.text().notNull(), // Kept for convenience
 	chainId: t.integer().notNull(),
 	roundId: t.bigint().notNull(),
 	price: t.text().notNull(), // Raw price value as string
@@ -91,11 +103,11 @@ export const priceUpdate = onchainTable("price_update", (t) => ({
 	timestamp: t.bigint().notNull(), // Block timestamp
 }));
 
-// New round events
+// New round events - directly references aggregator table
 export const newRound = onchainTable("new_round", (t) => ({
 	id: t.text().primaryKey(),
-	aggregatorAddress: t.text().notNull(),
-	dataFeedId: t.text(), // Reference to data_feed if known
+	aggregatorId: t.text().notNull(), // Direct reference to aggregator table
+	aggregatorAddress: t.text().notNull(), // Kept for convenience
 	chainId: t.integer().notNull(),
 	roundId: t.bigint().notNull(),
 	startedBy: t.text().notNull(),
@@ -108,15 +120,24 @@ export const newRound = onchainTable("new_round", (t) => ({
 }));
 
 export const priceUpdateRelations = relations(priceUpdate, ({ one }) => ({
-	dataFeed: one(dataFeed, {
-		fields: [priceUpdate.dataFeedId],
-		references: [dataFeed.id],
+	aggregator: one(aggregator, {
+		fields: [priceUpdate.aggregatorId],
+		references: [aggregator.id],
 	}),
 }));
 
 export const newRoundRelations = relations(newRound, ({ one }) => ({
+	aggregator: one(aggregator, {
+		fields: [newRound.aggregatorId],
+		references: [aggregator.id],
+	}),
+}));
+
+export const aggregatorRelations = relations(aggregator, ({ one, many }) => ({
 	dataFeed: one(dataFeed, {
-		fields: [newRound.dataFeedId],
+		fields: [aggregator.dataFeedId],
 		references: [dataFeed.id],
 	}),
+	priceUpdates: many(priceUpdate),
+	newRounds: many(newRound),
 }));
