@@ -13,7 +13,7 @@
 		"generate-config": "tsx src/generate-config.ts"
 	},
 	"dependencies": {
-		"@ponder/client": "^0.12.2",
+		"@ponder/client": "^0.12.3",
 		"@types/pg": "^8.15.5",
 		"cross-fetch": "^4.1.0",
 		"pg": "^8.16.3",

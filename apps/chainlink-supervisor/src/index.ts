@@ -33,10 +33,11 @@ export class ChainlinkSupervisor {
 		);
 
 		this.configGenerator = new ConfigGenerator(this.aggregatorsAppPath);
-		this.flagsProcessManager = new ProcessManager(flagsAppPath, "flags");
+		this.flagsProcessManager = new ProcessManager(flagsAppPath, "flags", 42069);
 		this.aggregatorsProcessManager = new ProcessManager(
 			this.aggregatorsAppPath,
 			"aggregators",
+			42070,
 		);
 	}
 
@@ -53,7 +54,6 @@ export class ChainlinkSupervisor {
 		console.log(`📍 Supervisor root: ${process.cwd()}`);
 		console.log(`🏁 Flags API: ${this.config.flagsApiUrl}`);
 		console.log(`📊 Aggregators API: ${this.config.aggregatorsApiUrl}`);
-		console.log(`⏱️ Discovery interval: ${this.config.checkInterval}ms`);
 
 		this.isRunning = true;
 
@@ -63,7 +63,7 @@ export class ChainlinkSupervisor {
 			await this.startFlagsProcess();
 
 			console.log("\n⏳ Waiting for flags indexer to complete sync...");
-			await this.waitForFlagsSync();
+			await this.waitForFlagsIndexerReady();
 
 			// Phase 2: Run aggregator discovery with complete flags data
 			console.log("\n🔍 Phase 2: Running aggregator discovery...");
@@ -94,46 +94,18 @@ export class ChainlinkSupervisor {
 	 */
 	private async startFlagsProcess(): Promise<void> {
 		console.log("🚀 Starting flags indexer process...");
+		console.log(`   This will start both indexer and API server on port 42069`);
 
 		const indexerStarted = await this.flagsProcessManager.startIndexer();
 		if (!indexerStarted) {
 			throw new Error("Failed to start flags indexer");
 		}
 
-		console.log("✅ Flags process started (indexer + server)");
+		console.log("✅ Flags process started (indexer + API server)");
+		console.log("   /ready endpoint will be available once indexing completes");
 	}
 
-	/**
-	 * Wait for flags indexer to complete initial sync
-	 */
-	private async waitForFlagsSync(): Promise<void> {
-		console.log("🔍 Waiting for flags indexer to become available...");
 
-		const maxWaitTime = 10 * 60 * 1000; // 10 minutes max
-		const startTime = Date.now();
-
-		// First wait for API to be available
-		while (Date.now() - startTime < maxWaitTime) {
-			try {
-				const response = await fetch(`${this.config.flagsApiUrl}/health`);
-				if (response.ok) {
-					console.log("✅ Flags indexer API is available");
-					break;
-				}
-			} catch (_error) {
-				// API not ready yet
-			}
-
-			console.log("⏳ Waiting for flags indexer API...");
-			await new Promise((resolve) => setTimeout(resolve, 3000));
-		}
-
-		if (Date.now() - startTime >= maxWaitTime) {
-			throw new Error(
-				"Flags indexer API failed to become available within timeout",
-			);
-		}
-	}
 
 	/**
 	 * Run aggregator discovery against synced flags database
@@ -141,11 +113,8 @@ export class ChainlinkSupervisor {
 	private async runAggregatorDiscovery(): Promise<any[]> {
 		console.log("🔍 Discovering aggregators from synced flags database...");
 
-		// Wait for flags indexer to be completely ready
-		await this.waitForFlagsIndexerReady();
-
 		try {
-			// Discover all aggregators
+			// Discover all aggregators directly from database
 			const aggregators = await this.discovery.discoverFromDatabase(
 				this.config.flagsApiUrl,
 			);
@@ -157,7 +126,8 @@ export class ChainlinkSupervisor {
 			return aggregators;
 		} catch (error) {
 			console.error("❌ Aggregator discovery failed:", error);
-			throw error; // Don't proceed with empty config
+			console.warn("⚠️ Proceeding with empty aggregator list...");
+			return []; // Proceed with empty config instead of throwing
 		}
 	}
 
@@ -172,17 +142,19 @@ export class ChainlinkSupervisor {
 
 		const maxWaitTime = 10 * 60 * 1000; // 10 minutes max
 		const startTime = Date.now();
-		const _lastEventCount = 0;
-		const _stableCount = 0;
 
 		while (Date.now() - startTime < maxWaitTime) {
 			try {
 				const readyResponse = await fetch(`${this.config.flagsApiUrl}/ready`);
-				const readyText = await readyResponse.text();
-
-				if (!readyText.includes("not complete")) {
-					console.log("✅ Flags indexer reports ready - all events processed!");
-					return;
+				
+				if (readyResponse.ok && readyResponse.status === 200) {
+					const readyText = await readyResponse.text();
+					
+					// Double check that the response doesn't indicate incomplete status
+					if (!readyText.includes("not complete")) {
+						console.log("✅ Flags indexer reports ready - all events processed!");
+						return;
+					}
 				}
 
 				// Show progress by checking if we're still seeing new events
@@ -192,9 +164,9 @@ export class ChainlinkSupervisor {
 				);
 
 				await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait 3 seconds
-			} catch (_error) {
+			} catch (error) {
 				console.log(
-					"⏳ Flags indexer /ready endpoint not available, waiting...",
+					`⏳ Flags indexer /ready endpoint not available, waiting... (${error instanceof Error ? error.message : 'Unknown error'})`,
 				);
 				await new Promise((resolve) => setTimeout(resolve, 3000));
 			}
@@ -229,9 +201,9 @@ export class ChainlinkSupervisor {
 	/**
 	 * Generate aggregator config with discovered aggregators
 	 */
-	private async generateAggregatorConfig(aggregators: any[]): Promise<void> {
+	private async generateAggregatorConfig(aggregators: any[], shouldRestart = false): Promise<void> {
 		console.log(
-			`🔧 Generating aggregator config with ${aggregators.length} aggregators...`,
+			`🔧 ${shouldRestart ? 'Updating' : 'Generating'} aggregator config with ${aggregators.length} aggregators...`,
 		);
 
 		try {
@@ -264,11 +236,25 @@ export class ChainlinkSupervisor {
 			}
 
 			console.log(
-				`✅ Aggregator config generated with ${aggregators.length} aggregators`,
+				`✅ Aggregator config ${shouldRestart ? 'updated' : 'generated'} with ${aggregators.length} aggregators`,
 			);
+
+			// Restart aggregators process if requested
+			if (shouldRestart) {
+				console.log("🔄 Restarting aggregators process with new config...");
+				const restarted = await this.aggregatorsProcessManager.restartAll();
+				
+				if (restarted) {
+					console.log("✅ Aggregators process restarted with new config");
+				} else {
+					console.error("❌ Failed to restart aggregators process");
+				}
+			}
 		} catch (error) {
-			console.error("❌ Failed to generate aggregator config:", error);
-			throw error;
+			console.error(`❌ Failed to ${shouldRestart ? 'update' : 'generate'} aggregator config:`, error);
+			if (!shouldRestart) {
+				throw error;
+			}
 		}
 	}
 
@@ -277,6 +263,7 @@ export class ChainlinkSupervisor {
 	 */
 	private startDiscoveryPolling(): void {
 		console.log("🔍 Starting ongoing aggregator discovery polling...");
+		console.log("   (Checking every 10 minutes for significant changes)");
 
 		const pollForNewAggregators = async () => {
 			try {
@@ -287,34 +274,86 @@ export class ChainlinkSupervisor {
 					return;
 				}
 
-				// Check if flags indexer is ready for queries
+				// Check if flags indexer has data by querying database directly
 				try {
-					const readyResponse = await fetch(`${this.config.flagsApiUrl}/ready`);
-					const readyText = await readyResponse.text();
-					if (readyText.includes("not complete")) {
-						console.log("⏳ Flags indexer sync not complete, waiting...");
+					const { Client } = await import("pg");
+					const client = new Client({
+						connectionString:
+							process.env.DATABASE_URL ||
+							"postgresql://postgres:postgres@localhost:5432/postgres",
+					});
+
+					await client.connect();
+					
+					const result = await client.query(`
+						SELECT COUNT(*) as count 
+						FROM chainlink_registry_flags.data_feed 
+						WHERE status = 'active' 
+						AND ignored = false 
+						LIMIT 1
+					`);
+					
+					await client.end();
+					
+					const count = parseInt(result.rows[0]?.count || "0");
+					
+					if (count === 0) {
+						console.log("⏳ No flags data available yet, skipping discovery...");
 						return;
 					}
 				} catch (_error) {
-					console.log("⏳ Flags indexer API not ready, waiting...");
+					console.log("⏳ Database not accessible, skipping discovery...");
 					return;
 				}
 
-				// Discover aggregators from flags database
-				const newAggregators = await this.discovery.discoverFromDatabase(
-					this.config.flagsApiUrl,
-				);
-
-				const currentAggregators = this.discovery.getAllAggregators();
-
-				if (newAggregators.length > currentAggregators.length) {
-					const newCount = newAggregators.length - currentAggregators.length;
-					console.log(
-						`🆕 Discovered ${newCount} new aggregators! Total: ${newAggregators.length}`,
+				// Get the last config generation timestamp
+				const lastGeneration = await this.configGenerator.getLastConfigGeneration();
+				
+				if (lastGeneration) {
+					console.log(`📅 Last config generated at: ${lastGeneration.toISOString()}`);
+					
+					// Only look for aggregators created after the last config generation
+					const newAggregators = await this.discovery.discoverFromDatabase(
+						this.config.flagsApiUrl,
+						lastGeneration,
 					);
 
-					// Update config with new aggregators
-					await this.updateAggregatorsConfig(newAggregators);
+					if (newAggregators.length === 0) {
+						console.log("📊 No new aggregators since last config generation");
+						return;
+					}
+
+					console.log(
+						`🆕 Found ${newAggregators.length} new aggregators since last config generation!`,
+					);
+
+					// Only restart if there are enough new aggregators to justify the disruption
+					if (newAggregators.length >= 3) {
+						console.log("🔄 Updating config with new aggregators...");
+						
+						// Get all aggregators for the full config
+						const allAggregators = await this.discovery.discoverFromDatabase(
+							this.config.flagsApiUrl,
+						);
+						
+						await this.generateAggregatorConfig(allAggregators, true);
+					} else {
+						console.log(
+							`📊 Only ${newAggregators.length} new aggregators found, not enough to trigger restart (need ≥3)`,
+						);
+					}
+				} else {
+					console.log("📅 No previous config generation timestamp found, doing full discovery");
+					
+					// First time or no timestamp - do full discovery
+					const allAggregators = await this.discovery.discoverFromDatabase(
+						this.config.flagsApiUrl,
+					);
+
+					if (allAggregators.length > 0) {
+						console.log(`🔄 Updating config with ${allAggregators.length} aggregators...`);
+						await this.generateAggregatorConfig(allAggregators, true);
+					}
 				}
 			} catch (error) {
 				console.error("❌ Discovery polling failed:", error);
@@ -322,10 +361,11 @@ export class ChainlinkSupervisor {
 			}
 		};
 
-		// Set up polling interval (no initial run since we already discovered)
+		// Set up polling interval - every 10 minutes instead of 30 seconds
+		const discoveryInterval = 10 * 60 * 1000; // 10 minutes
 		this.discoveryInterval = setInterval(
 			pollForNewAggregators,
-			this.config.checkInterval,
+			discoveryInterval,
 		);
 
 		this.cleanupFunctions.push(() => {
@@ -336,81 +376,15 @@ export class ChainlinkSupervisor {
 		});
 	}
 
-	/**
-	 * Update aggregators process config with new aggregators
-	 */
-	private async updateAggregatorsConfig(aggregators: any[]): Promise<void> {
-		console.log(
-			`🔧 Updating aggregators config with ${aggregators.length} aggregators...`,
-		);
 
-		try {
-			// Backup current config
-			await this.configGenerator.backupCurrentConfig();
-
-			// Generate new aggregators config
-			const _configPath =
-				await this.configGenerator.updateAggregatorConfig(aggregators);
-
-			// Validate the config
-			const isValid = await this.configGenerator.validateGeneratedConfig();
-			if (!isValid) {
-				throw new Error("Generated config validation failed");
-			}
-
-			// Restart aggregators process with new config
-			console.log("🔄 Restarting aggregators process with new config...");
-
-			const restarted = await this.aggregatorsProcessManager.restartAll();
-
-			if (restarted) {
-				console.log("✅ Aggregators process restarted with new config");
-			} else {
-				console.error("❌ Failed to restart aggregators process");
-			}
-		} catch (error) {
-			console.error("❌ Failed to update aggregators config:", error);
-		}
-	}
 
 	/**
-	 * Start health monitoring for both processes
+	 * Start status monitoring for both processes
 	 */
 	private startHealthMonitoring(): void {
-		console.log("🏥 Starting health monitoring...");
+		console.log("📊 Starting status monitoring...");
 
-		const checkHealth = async () => {
-			const flagsHealth = this.flagsProcessManager.getHealthStatus();
-			const aggregatorsHealth =
-				this.aggregatorsProcessManager.getHealthStatus();
-
-			// Restart flags process if needed
-			if (
-				!flagsHealth.indexer.running &&
-				flagsHealth.indexer.restarts < this.config.maxRetries
-			) {
-				console.log("⚠️ Flags indexer not running, restarting...");
-				await this.flagsProcessManager.restartIndexer();
-			}
-
-			// Restart aggregators process if needed
-			if (
-				!aggregatorsHealth.indexer.running &&
-				aggregatorsHealth.indexer.restarts < this.config.maxRetries
-			) {
-				console.log("⚠️ Aggregators indexer not running, restarting...");
-				await this.aggregatorsProcessManager.restartIndexer();
-			}
-		};
-
-		// Initial health check
-		checkHealth();
-
-		// Set up health monitoring interval
-		const healthInterval = setInterval(checkHealth, this.config.checkInterval);
-		this.cleanupFunctions.push(() => clearInterval(healthInterval));
-
-		// Status reporting
+		// Status reporting every 5 minutes
 		const statusInterval = setInterval(
 			() => {
 				const flagsHealth = this.flagsProcessManager.getHealthStatus();
@@ -429,8 +403,8 @@ export class ChainlinkSupervisor {
 					`  Discovered Aggregators: ${stats.total} across ${Object.keys(stats.byChain).length} chains`,
 				);
 			},
-			2 * 60 * 1000,
-		); // Every 2 minutes
+			5 * 60 * 1000,
+		); // Every 5 minutes
 
 		this.cleanupFunctions.push(() => clearInterval(statusInterval));
 	}
@@ -492,10 +466,7 @@ async function main() {
 		flagsApiUrl: process.env.FLAGS_API_URL || "http://localhost:42069",
 		aggregatorsApiUrl:
 			process.env.AGGREGATORS_API_URL || "http://localhost:42070",
-		checkInterval: parseInt(process.env.CHECK_INTERVAL || "30000"),
-		restartDelay: parseInt(process.env.RESTART_DELAY || "5000"),
 		maxRetries: parseInt(process.env.MAX_RETRIES || "3"),
-		dbConnectionString: process.env.DATABASE_URL,
 	};
 
 	const supervisor = new ChainlinkSupervisor(config);

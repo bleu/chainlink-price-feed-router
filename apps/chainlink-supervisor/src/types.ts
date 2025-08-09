@@ -1,10 +1,7 @@
 export interface SupervisorConfig {
 	flagsApiUrl: string;
 	aggregatorsApiUrl: string;
-	checkInterval: number;
-	restartDelay: number;
 	maxRetries: number;
-	dbConnectionString?: string;
 }
 
 export interface ProcessInfo {

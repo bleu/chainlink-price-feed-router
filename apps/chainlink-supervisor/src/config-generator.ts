@@ -14,6 +14,22 @@ export class ConfigGenerator {
 	}
 
 	/**
+	 * Get the last config generation timestamp from the config file
+	 */
+	async getLastConfigGeneration(): Promise<Date | null> {
+		try {
+			const config = await fs.readFile(this.aggregatorsConfigPath, "utf8");
+			const timestampMatch = config.match(/\/\/ Generated at: (.+)/);
+			if (timestampMatch) {
+				return new Date(timestampMatch[1]);
+			}
+		} catch (error) {
+			// Config file doesn't exist or can't be read
+		}
+		return null;
+	}
+
+	/**
 	 * Update aggregator config with discovered aggregators
 	 */
 	async updateAggregatorConfig(aggregators: AggregatorInfo[]): Promise<string> {
@@ -129,7 +145,9 @@ export class ConfigGenerator {
 		const beforeSection = originalConfig.substring(0, startIndex);
 		const afterSection = originalConfig.substring(endIndex);
 
+		const timestamp = new Date().toISOString();
 		const newSection = `AccessControlledOffchainAggregator: {
+			// Generated at: ${timestamp}
 			abi: AccessControlledOffchainAggregatorAbi,
 			chain: {
 ${aggregatorContracts}

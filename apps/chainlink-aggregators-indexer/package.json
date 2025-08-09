@@ -14,10 +14,10 @@
 		"db": "ponder db"
 	},
 	"dependencies": {
-		"@ponder/client": "^0.12.2",
+		"@ponder/client": "^0.12.3",
 		"cross-fetch": "^4.1.0",
 		"hono": "^4.9.0",
-		"ponder": "^0.12.2",
+		"ponder": "^0.12.3",
 		"viem": "^2.33.3"
 	},
 	"devDependencies": {

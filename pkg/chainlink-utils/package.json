@@ -11,7 +11,7 @@
 		"./tokenRegistry": "./src/tokenRegistry.ts"
 	},
 	"dependencies": {
-		"ponder": "^0.12.2",
+		"ponder": "^0.12.3",
 		"viem": "^2.33.3"
 	},
 	"devDependencies": {

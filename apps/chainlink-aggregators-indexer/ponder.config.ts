@@ -146,6 +146,7 @@ export default createConfig({
 		},
 		// Aggregator contracts - will be populated dynamically by supervisor
 		AccessControlledOffchainAggregator: {
+			// Generated at: 2025-08-10T17:15:40.674Z
 			abi: AccessControlledOffchainAggregatorAbi,
 			chain: {
 				arbitrum: {

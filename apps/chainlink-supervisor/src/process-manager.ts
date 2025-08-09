@@ -9,14 +9,16 @@ export class ProcessManager extends EventEmitter {
 	private processInfo = new Map<string, ProcessInfo>();
 	private appPath: string;
 	private appName: string;
+	private port: number;
 	private envVars: Record<string, string> = {};
 	private lastServerMessage: string = "";
 	private lastProgressUpdate: number = 0;
 
-	constructor(appPath: string, appName: string) {
+	constructor(appPath: string, appName: string, port: number) {
 		super();
 		this.appPath = appPath;
 		this.appName = appName;
+		this.port = port;
 		this.loadEnvironmentVariables();
 	}
 
@@ -64,7 +66,7 @@ export class ProcessManager extends EventEmitter {
 		console.log(`🚀 Starting ${this.appName} indexer...`);
 
 		try {
-			const childProcess = spawn("pnpm", ["dev"], {
+			const childProcess = spawn("pnpm", ["dev", "--port", this.port.toString()], {
 				cwd: this.appPath,
 				stdio: ["ignore", "pipe", "pipe"],
 				env: {
@@ -74,7 +76,7 @@ export class ProcessManager extends EventEmitter {
 					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
 					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
 					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
-					PONDER_PORT: this.envVars.PONDER_PORT,
+					PONDER_PORT: this.port.toString(), // Use explicit port
 				},
 			});
 
@@ -190,7 +192,7 @@ export class ProcessManager extends EventEmitter {
 		console.log(`🌐 Starting ${this.appName} server...`);
 
 		try {
-			const childProcess = spawn("pnpm", ["ponder", "serve"], {
+			const childProcess = spawn("pnpm", ["ponder", "serve", "--port", this.port.toString()], {
 				cwd: this.appPath,
 				stdio: ["ignore", "pipe", "pipe"],
 				env: {
@@ -200,7 +202,7 @@ export class ProcessManager extends EventEmitter {
 					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
 					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
 					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
-					PONDER_PORT: this.envVars.PONDER_PORT,
+					PONDER_PORT: this.port.toString(), // Use explicit port
 				},
 			});
 

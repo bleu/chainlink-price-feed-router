@@ -509,15 +509,6 @@ priceApi.get("/tokens/:chainId", async (c) => {
 	}
 });
 
-// Health check endpoint
-priceApi.get("/health", (c) => {
-	return c.json({
-		status: "ok",
-		timestamp: new Date().toISOString(),
-		service: "chainlink-price-api",
-	});
-});
-
 // API documentation endpoint
 priceApi.get("/", (c) => {
 	return c.json({

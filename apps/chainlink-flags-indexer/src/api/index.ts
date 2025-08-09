@@ -10,4 +10,6 @@ app.use("/graphql", graphql({ db, schema }));
 
 app.use("/sql/*", client({ db, schema }));
 
+// Health check endpoint
+
 export default app;

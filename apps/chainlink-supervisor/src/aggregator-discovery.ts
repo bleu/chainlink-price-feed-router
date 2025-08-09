@@ -8,6 +8,7 @@ export class AggregatorDiscovery {
 	 */
 	async discoverFromDatabase(
 		_apiUrl: string = "http://localhost:42069",
+		sinceTimestamp?: Date,
 	): Promise<AggregatorInfo[]> {
 		try {
 			console.log(
@@ -24,7 +25,7 @@ export class AggregatorDiscovery {
 
 			await client.connect();
 
-			const sqlQuery = `
+			let sqlQuery = `
 				SELECT 
 					id,
 					address,
@@ -32,21 +33,36 @@ export class AggregatorDiscovery {
 					description,
 					chain_id,
 					status,
-					ignored
+					ignored,
+					created_at
 				FROM chainlink_registry_flags.data_feed 
 				WHERE status = 'active' 
 				AND ignored = false 
 				AND aggregator_address IS NOT NULL
 			`;
 
-			const result = await client.query(sqlQuery);
+			// If we have a timestamp, only get aggregators created after that time
+			if (sinceTimestamp) {
+				sqlQuery += ` AND created_at > $1`;
+				console.log(`🔍 Looking for aggregators created after ${sinceTimestamp.toISOString()}`);
+			}
+
+			const result = sinceTimestamp 
+				? await client.query(sqlQuery, [sinceTimestamp.getTime()])
+				: await client.query(sqlQuery);
 			await client.end();
 
 			const activeFeeds = result.rows || [];
 
-			console.log(
-				`📊 Found ${activeFeeds.length} active, non-ignored data feeds`,
-			);
+			if (sinceTimestamp) {
+				console.log(
+					`📊 Found ${activeFeeds.length} new data feeds since ${sinceTimestamp.toISOString()}`,
+				);
+			} else {
+				console.log(
+					`📊 Found ${activeFeeds.length} active, non-ignored data feeds`,
+				);
+			}
 
 			const aggregators: AggregatorInfo[] = [];
 			const chainIdToName = this.getChainIdToNameMapping();
@@ -107,23 +123,7 @@ export class AggregatorDiscovery {
 		}
 	}
 
-	/**
-	 * Get aggregators for specific chains
-	 */
-	getAggregatorsForChains(chainNames: string[]): AggregatorInfo[] {
-		return Array.from(this.discoveredAggregators.values()).filter((agg) =>
-			chainNames.includes(agg.chainName),
-		);
-	}
 
-	/**
-	 * Get aggregators for a specific chain
-	 */
-	getAggregatorsForChain(chainName: string): AggregatorInfo[] {
-		return Array.from(this.discoveredAggregators.values()).filter(
-			(agg) => agg.chainName === chainName,
-		);
-	}
 
 	/**
 	 * Get all discovered aggregators
@@ -132,12 +132,9 @@ export class AggregatorDiscovery {
 		return Array.from(this.discoveredAggregators.values());
 	}
 
-	/**
-	 * Check if we have aggregators for a chain
-	 */
-	hasAggregatorsForChain(chainName: string): boolean {
-		return this.getAggregatorsForChain(chainName).length > 0;
-	}
+
+
+
 
 	/**
 	 * Get unique chain names that have aggregators
@@ -150,27 +147,7 @@ export class AggregatorDiscovery {
 		return Array.from(chains);
 	}
 
-	/**
-	 * Add a newly discovered aggregator
-	 */
-	addAggregator(aggregator: AggregatorInfo): void {
-		const key = `${aggregator.chainId}-${aggregator.address}`;
-		this.discoveredAggregators.set(key, aggregator);
-		console.log(
-			`➕ Added aggregator: ${aggregator.description} on ${aggregator.chainName}`,
-		);
-	}
 
-	/**
-	 * Remove an aggregator (when flagged)
-	 */
-	removeAggregator(chainId: number, address: string): void {
-		const key = `${chainId}-${address}`;
-		const removed = this.discoveredAggregators.delete(key);
-		if (removed) {
-			console.log(`➖ Removed aggregator: ${address} on chain ${chainId}`);
-		}
-	}
 
 	/**
 	 * Get statistics about discovered aggregators
