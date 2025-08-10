@@ -105,8 +105,6 @@ export class ChainlinkSupervisor {
 		console.log("   /ready endpoint will be available once indexing completes");
 	}
 
-
-
 	/**
 	 * Run aggregator discovery against synced flags database
 	 */
@@ -146,13 +144,15 @@ export class ChainlinkSupervisor {
 		while (Date.now() - startTime < maxWaitTime) {
 			try {
 				const readyResponse = await fetch(`${this.config.flagsApiUrl}/ready`);
-				
+
 				if (readyResponse.ok && readyResponse.status === 200) {
 					const readyText = await readyResponse.text();
-					
+
 					// Double check that the response doesn't indicate incomplete status
 					if (!readyText.includes("not complete")) {
-						console.log("✅ Flags indexer reports ready - all events processed!");
+						console.log(
+							"✅ Flags indexer reports ready - all events processed!",
+						);
 						return;
 					}
 				}
@@ -166,7 +166,7 @@ export class ChainlinkSupervisor {
 				await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait 3 seconds
 			} catch (error) {
 				console.log(
-					`⏳ Flags indexer /ready endpoint not available, waiting... (${error instanceof Error ? error.message : 'Unknown error'})`,
+					`⏳ Flags indexer /ready endpoint not available, waiting... (${error instanceof Error ? error.message : "Unknown error"})`,
 				);
 				await new Promise((resolve) => setTimeout(resolve, 3000));
 			}
@@ -201,9 +201,12 @@ export class ChainlinkSupervisor {
 	/**
 	 * Generate aggregator config with discovered aggregators
 	 */
-	private async generateAggregatorConfig(aggregators: any[], shouldRestart = false): Promise<void> {
+	private async generateAggregatorConfig(
+		aggregators: any[],
+		shouldRestart = false,
+	): Promise<void> {
 		console.log(
-			`🔧 ${shouldRestart ? 'Updating' : 'Generating'} aggregator config with ${aggregators.length} aggregators...`,
+			`🔧 ${shouldRestart ? "Updating" : "Generating"} aggregator config with ${aggregators.length} aggregators...`,
 		);
 
 		try {
@@ -236,14 +239,14 @@ export class ChainlinkSupervisor {
 			}
 
 			console.log(
-				`✅ Aggregator config ${shouldRestart ? 'updated' : 'generated'} with ${aggregators.length} aggregators`,
+				`✅ Aggregator config ${shouldRestart ? "updated" : "generated"} with ${aggregators.length} aggregators`,
 			);
 
 			// Restart aggregators process if requested
 			if (shouldRestart) {
 				console.log("🔄 Restarting aggregators process with new config...");
 				const restarted = await this.aggregatorsProcessManager.restartAll();
-				
+
 				if (restarted) {
 					console.log("✅ Aggregators process restarted with new config");
 				} else {
@@ -251,7 +254,10 @@ export class ChainlinkSupervisor {
 				}
 			}
 		} catch (error) {
-			console.error(`❌ Failed to ${shouldRestart ? 'update' : 'generate'} aggregator config:`, error);
+			console.error(
+				`❌ Failed to ${shouldRestart ? "update" : "generate"} aggregator config:`,
+				error,
+			);
 			if (!shouldRestart) {
 				throw error;
 			}
@@ -284,7 +290,7 @@ export class ChainlinkSupervisor {
 					});
 
 					await client.connect();
-					
+
 					const result = await client.query(`
 						SELECT COUNT(*) as count 
 						FROM chainlink_registry_flags.data_feed 
@@ -292,13 +298,15 @@ export class ChainlinkSupervisor {
 						AND ignored = false 
 						LIMIT 1
 					`);
-					
+
 					await client.end();
-					
+
 					const count = parseInt(result.rows[0]?.count || "0");
-					
+
 					if (count === 0) {
-						console.log("⏳ No flags data available yet, skipping discovery...");
+						console.log(
+							"⏳ No flags data available yet, skipping discovery...",
+						);
 						return;
 					}
 				} catch (_error) {
@@ -307,11 +315,14 @@ export class ChainlinkSupervisor {
 				}
 
 				// Get the last config generation timestamp
-				const lastGeneration = await this.configGenerator.getLastConfigGeneration();
-				
+				const lastGeneration =
+					await this.configGenerator.getLastConfigGeneration();
+
 				if (lastGeneration) {
-					console.log(`📅 Last config generated at: ${lastGeneration.toISOString()}`);
-					
+					console.log(
+						`📅 Last config generated at: ${lastGeneration.toISOString()}`,
+					);
+
 					// Only look for aggregators created after the last config generation
 					const newAggregators = await this.discovery.discoverFromDatabase(
 						this.config.flagsApiUrl,
@@ -330,12 +341,12 @@ export class ChainlinkSupervisor {
 					// Only restart if there are enough new aggregators to justify the disruption
 					if (newAggregators.length >= 3) {
 						console.log("🔄 Updating config with new aggregators...");
-						
+
 						// Get all aggregators for the full config
 						const allAggregators = await this.discovery.discoverFromDatabase(
 							this.config.flagsApiUrl,
 						);
-						
+
 						await this.generateAggregatorConfig(allAggregators, true);
 					} else {
 						console.log(
@@ -343,15 +354,19 @@ export class ChainlinkSupervisor {
 						);
 					}
 				} else {
-					console.log("📅 No previous config generation timestamp found, doing full discovery");
-					
+					console.log(
+						"📅 No previous config generation timestamp found, doing full discovery",
+					);
+
 					// First time or no timestamp - do full discovery
 					const allAggregators = await this.discovery.discoverFromDatabase(
 						this.config.flagsApiUrl,
 					);
 
 					if (allAggregators.length > 0) {
-						console.log(`🔄 Updating config with ${allAggregators.length} aggregators...`);
+						console.log(
+							`🔄 Updating config with ${allAggregators.length} aggregators...`,
+						);
 						await this.generateAggregatorConfig(allAggregators, true);
 					}
 				}
@@ -375,8 +390,6 @@ export class ChainlinkSupervisor {
 			}
 		});
 	}
-
-
 
 	/**
 	 * Start status monitoring for both processes

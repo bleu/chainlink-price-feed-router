@@ -23,7 +23,7 @@ export class ConfigGenerator {
 			if (timestampMatch) {
 				return new Date(timestampMatch[1]);
 			}
-		} catch (error) {
+		} catch (_error) {
 			// Config file doesn't exist or can't be read
 		}
 		return null;

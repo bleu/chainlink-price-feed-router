@@ -44,10 +44,12 @@ export class AggregatorDiscovery {
 			// If we have a timestamp, only get aggregators created after that time
 			if (sinceTimestamp) {
 				sqlQuery += ` AND created_at > $1`;
-				console.log(`🔍 Looking for aggregators created after ${sinceTimestamp.toISOString()}`);
+				console.log(
+					`🔍 Looking for aggregators created after ${sinceTimestamp.toISOString()}`,
+				);
 			}
 
-			const result = sinceTimestamp 
+			const result = sinceTimestamp
 				? await client.query(sqlQuery, [sinceTimestamp.getTime()])
 				: await client.query(sqlQuery);
 			await client.end();
@@ -123,18 +125,12 @@ export class AggregatorDiscovery {
 		}
 	}
 
-
-
 	/**
 	 * Get all discovered aggregators
 	 */
 	getAllAggregators(): AggregatorInfo[] {
 		return Array.from(this.discoveredAggregators.values());
 	}
-
-
-
-
 
 	/**
 	 * Get unique chain names that have aggregators
@@ -146,8 +142,6 @@ export class AggregatorDiscovery {
 		}
 		return Array.from(chains);
 	}
-
-
 
 	/**
 	 * Get statistics about discovered aggregators

@@ -12,7 +12,6 @@ export class ProcessManager extends EventEmitter {
 	private port: number;
 	private envVars: Record<string, string> = {};
 	private lastServerMessage: string = "";
-	private lastProgressUpdate: number = 0;
 
 	constructor(appPath: string, appName: string, port: number) {
 		super();
