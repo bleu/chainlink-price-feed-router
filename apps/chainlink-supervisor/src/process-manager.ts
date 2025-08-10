@@ -66,19 +66,23 @@ export class ProcessManager extends EventEmitter {
 		console.log(`🚀 Starting ${this.appName} indexer...`);
 
 		try {
-			const childProcess = spawn("pnpm", ["dev", "--port", this.port.toString()], {
-				cwd: this.appPath,
-				stdio: ["ignore", "pipe", "pipe"],
-				env: {
-					...process.env,
-					...this.envVars, // Load from .envrc
-					// Override with any supervisor-level env vars
-					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
-					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
-					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
-					PONDER_PORT: this.port.toString(), // Use explicit port
+			const childProcess = spawn(
+				"pnpm",
+				["dev", "--port", this.port.toString()],
+				{
+					cwd: this.appPath,
+					stdio: ["ignore", "pipe", "pipe"],
+					env: {
+						...process.env,
+						...this.envVars, // Load from .envrc
+						// Override with any supervisor-level env vars
+						DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
+						DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
+						DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
+						PONDER_PORT: this.port.toString(), // Use explicit port
+					},
 				},
-			});
+			);
 
 			this.processes.set("indexer", childProcess);
 			this.processInfo.set("indexer", {
@@ -125,23 +129,6 @@ export class ProcessManager extends EventEmitter {
 						if (cleanLine.startsWith("Server live at")) {
 							this.lastServerMessage = cleanLine;
 						}
-					}
-				}
-
-				// Show periodic progress summary (very infrequent)
-				const now = Date.now();
-				if (now - this.lastProgressUpdate > 30000) {
-					// Every 30 seconds
-					if (output.includes("historical") && output.includes("100%")) {
-						console.log(
-							`[${this.appName.toUpperCase()} INDEXER] 📊 Historical sync complete, waiting for indexing function to complete...`,
-						);
-						this.lastProgressUpdate = now;
-					} else if (output.includes("historical")) {
-						console.log(
-							`[${this.appName.toUpperCase()} INDEXER] 📊 Historical sync in progress...`,
-						);
-						this.lastProgressUpdate = now;
 					}
 				}
 			});
@@ -192,19 +179,23 @@ export class ProcessManager extends EventEmitter {
 		console.log(`🌐 Starting ${this.appName} server...`);
 
 		try {
-			const childProcess = spawn("pnpm", ["ponder", "serve", "--port", this.port.toString()], {
-				cwd: this.appPath,
-				stdio: ["ignore", "pipe", "pipe"],
-				env: {
-					...process.env,
-					...this.envVars, // Load from .envrc
-					// Override with any supervisor-level env vars
-					DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
-					DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
-					DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
-					PONDER_PORT: this.port.toString(), // Use explicit port
+			const childProcess = spawn(
+				"pnpm",
+				["ponder", "serve", "--port", this.port.toString()],
+				{
+					cwd: this.appPath,
+					stdio: ["ignore", "pipe", "pipe"],
+					env: {
+						...process.env,
+						...this.envVars, // Load from .envrc
+						// Override with any supervisor-level env vars
+						DATABASE_URL: process.env.DATABASE_URL || this.envVars.DATABASE_URL,
+						DRPC_API_KEY: process.env.DRPC_API_KEY || this.envVars.DRPC_API_KEY,
+						DATABASE_SCHEMA: this.envVars.DATABASE_SCHEMA,
+						PONDER_PORT: this.port.toString(), // Use explicit port
+					},
 				},
-			});
+			);
 
 			this.processes.set("server", childProcess);
 			this.processInfo.set("server", {
