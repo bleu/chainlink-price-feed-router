@@ -1,0 +1,19 @@
+diff --git a/src/utils/rpc.ts b/src/utils/rpc.ts
+index e2dee57c649df19cbd7ab21705d4b6bfb5366b2b..7fa4667bd2276564fc6bf758091ab5e0a6c29f18 100644
+--- a/src/utils/rpc.ts
++++ b/src/utils/rpc.ts
+@@ -678,8 +678,13 @@ export const standardizeTransaction = (
+   if (transaction.from === undefined) {
+     throw new Error("'transaction.from' is a required property");
+   }
++  
++  // Handle missing 'to' field - some RPC providers omit this for contract creation
+   if (transaction.to === undefined) {
+-    throw new Error("'transaction.to' is a required property");
++    console.warn(`🔧 PONDER PATCH: Missing 'to' field in transaction ${transaction.hash}, setting to null (likely contract creation)`);
++    console.warn(`   Block: ${transaction.blockNumber} (${transaction.blockHash})`);
++    console.warn(`   From: ${transaction.from}`);
++    transaction.to = null;
+   }
+ 
+   // non-required properties
