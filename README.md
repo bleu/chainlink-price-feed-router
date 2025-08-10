@@ -113,7 +113,7 @@ pnpm build
 import { ChainlinkRegistryClient } from '@chainlink-registry/sdk';
 
 const client = new ChainlinkRegistryClient({
-  baseUrl: 'http://localhost:42069'
+  baseUrl: 'http://localhost:42070'  // Use aggregators indexer for price data
 });
 
 // Get a price quote
@@ -151,12 +151,12 @@ console.log(`Available tokens: ${tokens.tokens.join(', ')}`);
 
 ### Basic Price Query
 ```bash
-curl "http://localhost:42069/price/quote/8453/ETH/USD"
+curl "http://localhost:42070/price/quote/8453/ETH/USD"
 ```
 
 ### Multi-hop Pricing
 ```bash
-curl "http://localhost:42069/price/quote/1/BTC/EUR"
+curl "http://localhost:42070/price/quote/1/BTC/EUR"
 ```
 
 ## 🚧 Development
@@ -171,14 +171,29 @@ curl "http://localhost:42069/price/quote/1/BTC/EUR"
 ```
 chainlink-registry/
 ├── apps/
-│   └── chainlink-registry-indexer/    # Ponder indexer application
+│   ├── chainlink-flags-indexer/      # Lightweight flags-only indexer
+│   │   ├── src/
+│   │   │   ├── index.ts              # Flag event processing
+│   │   │   ├── api/                  # GraphQL/SQL API
+│   │   │   └── utils/                # Data feed utilities
+│   │   ├── abis/                     # Contract ABIs
+│   │   ├── ponder.config.ts          # Multi-chain configuration
+│   │   └── ponder.schema.ts          # Database schema
+│   ├── chainlink-aggregators-indexer/ # Full aggregator indexer
+│   │   ├── src/
+│   │   │   ├── index.ts              # Flag + aggregator processing
+│   │   │   ├── api/                  # Price quote API
+│   │   │   └── utils/                # Pricing utilities
+│   │   ├── abis/                     # Contract ABIs
+│   │   ├── ponder.config.ts          # Dynamic configuration
+│   │   └── ponder.schema.ts          # Extended database schema
+│   └── chainlink-supervisor/         # Process orchestrator
 │       ├── src/
-│       │   ├── index.ts              # Main indexer logic
-│       │   ├── api/                  # REST API endpoints
-│       │   └── utils/                # Utilities for data fetching
-│       ├── abis/                     # Contract ABIs
-│       ├── ponder.config.ts          # Multi-chain configuration
-│       └── ponder.schema.ts          # Database schema
+│       │   ├── index.ts              # Main supervisor logic
+│       │   ├── process-manager.ts    # Process lifecycle management
+│       │   ├── aggregator-discovery.ts # Discovery logic
+│       │   └── config-generator.ts   # Dynamic config updates
+│       └── types.ts                  # TypeScript definitions
 ├── pkg/
 │   └── sdk/                          # TypeScript SDK
 │       ├── src/
