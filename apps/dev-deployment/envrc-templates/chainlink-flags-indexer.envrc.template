@@ -1,0 +1,9 @@
+# Database
+export DATABASE_URL="${DATABASE_URL}"
+export DATABASE_SCHEMA="chainlink_registry_flags"
+
+# RPC Access
+export DRPC_API_KEY="${DRPC_API_KEY}"
+
+# Ponder Configuration
+export PONDER_PORT="42069"

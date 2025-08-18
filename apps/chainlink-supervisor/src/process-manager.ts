@@ -67,7 +67,7 @@ export class ProcessManager extends EventEmitter {
 		try {
 			const childProcess = spawn(
 				"pnpm",
-				["dev", "--port", this.port.toString()],
+				["start", "--port", this.port.toString(), "--hostname", "0.0.0.0"],
 				{
 					cwd: this.appPath,
 					stdio: ["ignore", "pipe", "pipe"],

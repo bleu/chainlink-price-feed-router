@@ -138,7 +138,7 @@ export class ChainlinkSupervisor {
 		);
 		console.log("   (This ensures complete data for aggregator discovery)");
 
-		const maxWaitTime = 10 * 60 * 1000; // 10 minutes max
+		const maxWaitTime = 60 * 60 * 1000; // 60 minutes max
 		const startTime = Date.now();
 
 		while (Date.now() - startTime < maxWaitTime) {

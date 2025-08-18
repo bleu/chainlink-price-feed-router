@@ -1,0 +1,34 @@
+services:
+  postgres:
+    restart: unless-stopped
+    image: postgres:17
+    env_file:
+      - ./env/postgres.env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ${POSTGRES_BIND_DIR}:/var/lib/postgresql/data
+    networks: [default]
+    shm_size: '2g'
+
+  chainlink-supervisor:
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: apps/dev-deployment/Dockerfile
+    ports:
+      - ${FLAGS_INDEXER_PORT}:42069
+      - ${AGGREGATORS_INDEXER_PORT}:42070
+    env_file:
+      - ./.env
+    networks:
+      default:
+      proxy:
+        aliases:
+          - dev-chainlink-supervisor
+
+networks:
+  default:
+  proxy:
+    name: bleu-proxy-network
+    external: true
