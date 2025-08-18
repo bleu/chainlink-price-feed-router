@@ -11,11 +11,11 @@
 		"./tokenRegistry": "./src/tokenRegistry.ts"
 	},
 	"dependencies": {
-		"ponder": "^0.12.3",
-		"viem": "^2.33.3"
+		"ponder": "^0.12.6",
+		"viem": "^2.34.0"
 	},
 	"devDependencies": {
-		"@types/node": "^24.2.1",
+		"@types/node": "^24.3.0",
 		"typescript": "^5.9.2"
 	}
 }

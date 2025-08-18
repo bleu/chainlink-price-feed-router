@@ -14,15 +14,15 @@
 		"db": "ponder db"
 	},
 	"dependencies": {
-		"@ponder/client": "^0.12.3",
+		"@ponder/client": "^0.12.6",
 		"cross-fetch": "^4.1.0",
-		"hono": "^4.9.0",
-		"ponder": "^0.12.3",
-		"viem": "^2.33.3"
+		"hono": "^4.9.2",
+		"ponder": "^0.12.6",
+		"viem": "^2.34.0"
 	},
 	"devDependencies": {
-		"@types/node": "^24.2.1",
-		"tsx": "^4.20.3",
+		"@types/node": "^24.3.0",
+		"tsx": "^4.20.4",
 		"typescript": "^5.9.2"
 	}
 }
