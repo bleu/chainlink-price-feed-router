@@ -15,7 +15,7 @@
 	},
 	"dependencies": {
 		"@ponder/client": "^0.12.6",
-		"hono": "^4.9.2",
+		"hono": "^4.9.6",
 		"ponder": "^0.12.6",
 		"viem": "^2.34.0"
 	},
