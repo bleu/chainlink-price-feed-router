@@ -16,7 +16,7 @@
 	"dependencies": {
 		"@ponder/client": "^0.12.6",
 		"cross-fetch": "^4.1.0",
-		"hono": "^4.9.2",
+		"hono": "^4.12.12",
 		"ponder": "^0.12.6",
 		"viem": "^2.34.0"
 	},
